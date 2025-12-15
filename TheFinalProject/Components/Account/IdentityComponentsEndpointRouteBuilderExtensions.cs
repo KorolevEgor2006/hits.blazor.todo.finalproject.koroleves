@@ -9,7 +9,7 @@ using Microsoft.Extensions.Primitives;
 using TheFinalProject.Components.Account.Pages;
 using TheFinalProject.Components.Account.Pages.Manage;
 using TheFinalProject.Data;
-
+using TheFinalProject.Data.Models;
 namespace Microsoft.AspNetCore.Routing
 {
     internal static class IdentityComponentsEndpointRouteBuilderExtensions

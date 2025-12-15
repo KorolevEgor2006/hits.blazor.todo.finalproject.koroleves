@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using TheFinalProject.Data;
+using TheFinalProject.Data.Models;
 
 namespace TheFinalProject.Components.Account
 {

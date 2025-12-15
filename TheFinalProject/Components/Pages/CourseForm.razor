@@ -1,0 +1,356 @@
+﻿@page "/courses/add"
+@page "/courses/edit/{Id:int}"
+@using TheFinalProject.Data.Models
+@using TheFinalProject.Data.Interfaces
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Instructor,Admin")]
+@rendermode InteractiveServer
+@inject ICourseService data
+@inject NavigationManager navigate
+@inject AuthenticationStateProvider authProvider
+@inject IJSRuntime JS
+@inject IHttpContextAccessor httpContextAccessor
+
+<PageTitle>@(Course.Id == 0 ? "Создание курса" : "Редактирование курса")</PageTitle>
+
+@if (loading)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3><i class="bi bi-book"></i> @(Course.Id == 0 ? "Создание нового курса" : $"Редактирование: {Course.Title}")</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" id="courseForm" @onsubmit:preventDefault @onsubmit="HandleSubmit">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> @errorMessage
+                        </div>
+                    }
+                    <AntiforgeryToken />
+
+                    <div class="row">
+                        <div class="col-md-8">
+                           
+                            <input type="hidden" name="Id" value="@Course.Id" />
+                            <input type="hidden" name="InstructorId" value="@Course.InstructorId" />
+
+                            <div class="form-group mb-3">
+                                <label class="form-label">
+                                    <i class="bi bi-card-heading"></i> Название курса *
+                                </label>
+                                <input type="text" name="Title" class="form-control"
+                                       @bind="Course.Title" @bind:event="oninput" required />
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label class="form-label">
+                                    <i class="bi bi-text-paragraph"></i> Полное описание *
+                                </label>
+                                <textarea name="Description" class="form-control" rows="5"
+                                          @bind="Course.Description" @bind:event="oninput" required></textarea>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label class="form-label">
+                                    <i class="bi bi-text-indent-left"></i> Краткое описание
+                                </label>
+                                <textarea name="ShortDescription" class="form-control" rows="2"
+                                          @bind="Course.ShortDescription" @bind:event="oninput"></textarea>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="bi bi-tag"></i> Категория
+                                        </label>
+                                        <select name="Category" class="form-control" @bind="Course.Category" @bind:event="onchange">
+                                            <option value="">Выберите категорию</option>
+                                            <option value="Программирование">Программирование</option>
+                                            <option value="Веб-разработка">Веб-разработка</option>
+                                            <option value="Мобильная разработка">Мобильная разработка</option>
+                                            <option value="Дизайн">Дизайн</option>
+                                            <option value="Маркетинг">Маркетинг</option>
+                                            <option value="Бизнес">Бизнес</option>
+                                            <option value="Наука">Наука</option>
+                                            <option value="Искусство">Искусство</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="bi bi-bar-chart"></i> Уровень сложности
+                                        </label>
+                                        <select name="Level" class="form-control" @bind="Course.Level" @bind:event="onchange">
+                                            <option value="Beginner">Начинающий</option>
+                                            <option value="Intermediate">Средний</option>
+                                            <option value="Advanced">Продвинутый</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="bi bi-clock"></i> Длительность (часов) *
+                                        </label>
+                                        <input type="number" name="TotalDurationHours" class="form-control"
+                                               @bind="Course.TotalDurationHours" @bind:event="oninput" min="1" max="1000" required />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="bi bi-currency-dollar"></i> Цена (руб.) *
+                                        </label>
+                                        <input type="number" name="Price" class="form-control"
+                                               @bind="Course.Price" @bind:event="oninput" min="0" max="1000000" step="100" required />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label class="form-label">
+                                    <i class="bi bi-tags"></i> Теги (через запятую)
+                                </label>
+                                <input type="text" name="TagsInput" class="form-control"
+                                       @bind="tagsInput" @bind:event="oninput" placeholder="C#, программирование, .NET, веб-разработка" />
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="bi bi-image"></i> URL обложки
+                                        </label>
+                                        <input type="url" name="ImageUrl" class="form-control"
+                                               @bind="Course.ImageUrl" @bind:event="oninput" placeholder="https://example.com/image.jpg" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="bi bi-play-btn"></i> URL превью-видео
+                                        </label>
+                                        <input type="url" name="PreviewVideoUrl" class="form-control"
+                                               @bind="Course.PreviewVideoUrl" @bind:event="oninput" placeholder="https://youtube.com/embed/..." />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5><i class="bi bi-gear"></i> Настройки публикации</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check form-switch mb-3">
+                                        <input type="checkbox" name="IsPublished" class="form-check-input"
+                                               @bind="Course.IsPublished" @bind:event="onchange" />
+                                        <label class="form-check-label">
+                                            Опубликовать курс
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check form-switch mb-3">
+                                        <input type="checkbox" name="IsFeatured" class="form-check-input"
+                                               @bind="Course.IsFeatured" @bind:event="onchange" />
+                                        <label class="form-check-label">
+                                            Сделать рекомендуемым
+                                        </label>
+                                    </div>
+
+                                    <div class="form-group mb-3">
+                                        <label class="form-label">Статус курса</label>
+                                        <select name="Status" class="form-control" @bind="Course.Status" @bind:event="onchange">
+                                            <option value="Draft">Черновик</option>
+                                            <option value="Review">На проверке</option>
+                                            <option value="Active">Активный</option>
+                                            <option value="Archived">В архиве</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-top">
+                        <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                            @if (isSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true">Сохранение...</span>
+                                
+                                                }
+                            else
+                            {
+                                <i class="bi bi-save me-2"></i>
+                                @(Course.Id == 0 ? "Создать курс" : "Сохранить изменения")
+                            }
+                        </button>
+
+                        <button type="button" class="btn btn-secondary ms-2" @onclick="Cancel" disabled="@isSaving">
+                            <i class="bi bi-x-circle me-2"></i>Отмена
+                        </button>
+
+                        @if (Course.Id > 0)
+                        {
+                            <a href="@($"/courses/{Course.Id}")" class="btn btn-outline-info ms-2">
+                                <i class="bi bi-eye me-2"></i>Просмотр
+                            </a>
+                        }
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Course Course { get; set; } = new();
+    private string tagsInput = string.Empty;
+    private bool loading = true;
+    private bool isSaving = false;
+    private string? currentUserId;
+    private string errorMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await authProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            currentUserId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(currentUserId))
+            {
+                navigate.NavigateTo("/login");
+                return;
+            }
+
+            if (Id > 0)
+            {
+                var existingCourse = await data.GetCourseByIdAsync(Id);
+                if (existingCourse != null)
+                {
+                    if (existingCourse.InstructorId != currentUserId && !user.IsInRole("Admin"))
+                    {
+                        navigate.NavigateTo("/courses");
+                        return;
+                    }
+
+                    Course = existingCourse;
+                    tagsInput = existingCourse.Tags != null ? string.Join(", ", existingCourse.Tags) : "";
+                }
+                else
+                {
+                    navigate.NavigateTo("/courses");
+                    return;
+                }
+            }
+            else
+            {
+                Course = new Course
+                {
+                    Id = 0,
+                    InstructorId = currentUserId,
+                    TotalDurationHours = 10,
+                    Price = 0,
+                    Level = CourseLevel.Beginner,
+                    Status = CourseStatus.Draft,
+                    CreatedDate = DateTime.Now
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка загрузки: {ex.Message}";
+            Console.WriteLine($"Error: {ex}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (isSaving) return;
+
+        isSaving = true;
+        errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(tagsInput))
+            {
+                Course.Tags = tagsInput.Split(',')
+                    .Select(t => t.Trim())
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .ToList();
+            }
+
+            if (string.IsNullOrWhiteSpace(Course.Title))
+            {
+                errorMessage = "Название курса обязательно";
+                isSaving = false;
+                StateHasChanged();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(Course.Description))
+            {
+                errorMessage = "Описание курса обязательно";
+                isSaving = false;
+                StateHasChanged();
+                return;
+            }
+
+            if (string.IsNullOrEmpty(Course.InstructorId))
+            {
+                Course.InstructorId = currentUserId;
+            }
+            if (Course.Id == 0)
+            {
+                Course.CreatedDate = DateTime.Now;
+            }
+            else
+            {
+                Course.UpdatedDate = DateTime.Now;
+            }
+
+            Console.WriteLine($"Сохранение курса: {Course.Title}");
+            await data.SaveCourseAsync(Course);
+            Console.WriteLine($"Курс сохранен, ID: {Course.Id}");
+            navigate.NavigateTo($"/courses/{Course.Id}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка сохранения: {ex.Message}";
+            Console.WriteLine($"Error: {ex}");
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel()
+    {
+        navigate.NavigateTo(Course.Id > 0 ? $"/courses/{Course.Id}" : "/courses");
+    }
+}

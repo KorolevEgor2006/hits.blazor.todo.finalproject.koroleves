@@ -1,54 +1,78 @@
 ﻿@implements IDisposable
-
 @inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthProvider
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">TheFinalProject</a>
+        <a class="navbar-brand" href="/">
+            <i class="bi bi-mortarboard-fill"></i> Учебная платформа
+        </a>
     </div>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<input type="checkbox" title="Навигационное меню" class="navbar-toggler" />
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="auth">
-                <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Auth Required
+            <NavLink class="nav-link" href="/courses" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Курсы
             </NavLink>
         </div>
 
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Manage">
+                    <NavLink class="nav-link" href="/my-courses">
+                        <span class="bi bi-journal-bookmark-fill-nav-menu" aria-hidden="true"></span> Мои курсы
+                    </NavLink>
+                </div>
+                @if (!isInstructor && !isAdmin)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/student/dashboard">
+                            <span class="bi bi-speedometer2-nav-menu" aria-hidden="true"></span> Панель студента
+                        </NavLink>
+                    </div>
+                    }
+                @if (isInstructor)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/courses/add">
+                            <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Создать курс
+                        </NavLink>
+                    </div>
+                    if (!isAdmin)
+                    {
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="/instructor/dashboard">
+                                <span class="bi bi-person-badge-fill-nav-menu" aria-hidden="true"></span> Панель курсов
+                            </NavLink>
+                        </div>
+                    }
+                }
+
+                @if (isAdmin)
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/admin/dashboard">
+                            <span class="bi bi-shield-check-nav-menu" aria-hidden="true"></span> Админ панель
+                        </NavLink>
+                    </div>
+                }
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/Account/Manage">
                         <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
                     </NavLink>
                 </div>
+
                 <div class="nav-item px-3">
                     <form action="Account/Logout" method="post">
                         <AntiforgeryToken />
                         <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link">
-                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
+                        <button type="submit" class="nav-link btn btn-link">
+                            <span class="bi bi-box-arrow-left-nav-menu" aria-hidden="true"></span> Выйти
                         </button>
                     </form>
                 </div>
@@ -56,12 +80,12 @@
             <NotAuthorized>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="Account/Register">
-                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Register
+                        <span class="bi bi-person-plus-nav-menu" aria-hidden="true"></span> Регистрация
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="Account/Login">
-                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Login
+                        <span class="bi bi-box-arrow-in-right-nav-menu" aria-hidden="true"></span> Вход
                     </NavLink>
                 </div>
             </NotAuthorized>
@@ -71,11 +95,18 @@
 
 @code {
     private string? currentUrl;
+    private bool isInstructor = false;
+    private bool isAdmin = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
+
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        isInstructor = user.IsInRole("Instructor") || user.IsInRole("Admin");
+        isAdmin = user.IsInRole("Admin");
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)

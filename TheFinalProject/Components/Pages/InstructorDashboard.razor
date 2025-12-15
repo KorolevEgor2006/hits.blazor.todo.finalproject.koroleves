@@ -1,0 +1,567 @@
+﻿@page "/instructor/dashboard"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Instructor,Admin")]
+@using Microsoft.AspNetCore.Identity
+@using TheFinalProject.Data.Models
+@using TheFinalProject.Data.Interfaces
+@inject ICourseService data
+@inject AuthenticationStateProvider authProvider
+@inject NavigationManager navigate
+
+<PageTitle>Панель преподавателя</PageTitle>
+
+@if (instructor == null || loading)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container-fluid">
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-2 text-center">
+                        @if (!string.IsNullOrEmpty(instructor.ProfilePictureUrl))
+                        {
+                            <img src="@instructor.ProfilePictureUrl"
+                                 class="rounded-circle img-thumbnail"
+                                 alt="Фото профиля"
+                                 style="width: 120px; height: 120px; object-fit: cover;">
+                        }
+                        else
+                        {
+                            <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center"
+                                 style="width: 120px; height: 120px;">
+                                <span class="text-white fs-1">
+                                    @instructor.FirstName.FirstOrDefault()@instructor.LastName.FirstOrDefault()
+                                </span>
+                            </div>
+                        }
+                    </div>
+                    <div class="col-md-6">
+                        <h2 class="mb-1">@instructor.FullName</h2>
+                        <p class="text-muted mb-2">
+                            <i class="bi bi-envelope me-1"></i>@instructor.Email
+                        </p>
+                        @if (!string.IsNullOrEmpty(instructor.Specialization))
+                        {
+                            <p class="mb-1">
+                                <i class="bi bi-gear me-1"></i>
+                                <strong>Специализация:</strong> @instructor.Specialization
+                            </p>
+                        }
+                        @if (!string.IsNullOrEmpty(instructor.Qualifications))
+                        {
+                            <p class="mb-1">
+                                <i class="bi bi-award me-1"></i>
+                                <strong>Квалификация:</strong> @instructor.Qualifications
+                            </p>
+                        }
+                        <p class="mb-0">
+                            <i class="bi bi-clock-history me-1"></i>
+                            <strong>Опыт:</strong> @instructor.YearsOfExperience лет
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="card bg-light">
+                                    <div class="card-body py-3">
+                                        <h3 class="mb-0 text-primary">@instructor.TotalCoursesCreated</h3>
+                                        <small class="text-muted">Курсов</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="card bg-light">
+                                    <div class="card-body py-3">
+                                        <h3 class="mb-0 text-success">@instructor.PublishedCoursesCount</h3>
+                                        <small class="text-muted">Опубликовано</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="card bg-light">
+                                    <div class="card-body py-3">
+                                        <h3 class="mb-0 text-warning">@instructor.AverageCourseRating.ToString("F1")</h3>
+                                        <small class="text-muted">Средний рейтинг</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-speedometer2 me-2"></i>Общая статистика
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Общее количество студентов:</span>
+                                <strong>@totalStudents</strong>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-info" role="progressbar"
+                                     style="width: @(Math.Min(totalStudents * 2, 100))%"></div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Средняя завершенность курсов:</span>
+                                <strong>@averageCompletionRate.ToString("F1")%</strong>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar @(averageCompletionRate > 50 ? "bg-success" : averageCompletionRate > 20 ? "bg-warning" : "bg-danger")"
+                                     role="progressbar"
+                                     style="width: @averageCompletionRate%"></div>
+                            </div>
+                        </div>
+
+                        <div class="row text-center">
+                            <div class="col-6 mb-3">
+                                <div class="card border">
+                                    <div class="card-body py-3">
+                                        <div class="display-6">@totalLessons</div>
+                                        <small class="text-muted">Уроков создано</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <div class="card border">
+                                    <div class="card-body py-3">
+                                        <div class="display-6">@totalQuizzes</div>
+                                        <small class="text-muted">Тестов создано</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+               
+            </div>
+
+           
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-journal-check me-2"></i>Управление курсами
+                        </h5>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm @(showActiveCourses ? "btn-primary" : "btn-outline-primary")"
+                                    @onclick="ShowActiveCourses">
+                                Активные
+                            </button>
+                            <button class="btn btn-sm @(!showActiveCourses ? "btn-warning" : "btn-outline-warning")"
+                                    @onclick="ShowDraftCourses">
+                                Черновики
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var displayedCourses = showActiveCourses
+                            ? instructor.GetActiveCourses().ToList()
+                            : instructor.GetDraftCourses().ToList();
+                        }
+
+                        @if (!displayedCourses.Any())
+                        {
+                            <div class="text-center py-4">
+                                <i class="bi bi-journal text-muted" style="font-size: 3rem;"></i>
+                                <h5 class="mt-3">@(showActiveCourses ? "Нет активных курсов" : "Нет черновиков")</h5>
+                                <p class="text-muted">
+                                    @(showActiveCourses
+                                                                ? "Создайте новый курс или опубликуйте существующие черновики."
+                                                                : "Все ваши курсы опубликованы или создайте новый черновик.")
+                        </p>
+                        @if (!showActiveCourses)
+                                {
+                                    <button class="btn btn-primary" @onclick="CreateNewCourse">
+                                        <i class="bi bi-plus-circle me-2"></i>Создать черновик
+                                    </button>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Курс</th>
+                                            <th>Статус</th>
+                                            <th>Студенты</th>
+                                            <th>Рейтинг</th>
+                                            <th>Прогресс</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var course in displayedCourses.Take(5))
+                                        {
+                                            var students = courseStudentsDict.ContainsKey(course.Id)
+                                            ? courseStudentsDict[course.Id]
+                                            : new List<Student>();
+                                            var completedStudentsCount = students.Count(s => s.Enrollments.Any(e => e.CourseId == course.Id && e.IsCompleted));
+                                            var completionRate = course.CompletionRate;
+
+                                            <tr>
+                                                <td>
+                                                    <strong>@course.Title</strong><br>
+                                                    <small class="text-muted">@course.Category</small>
+                                                </td>
+                                                <td>
+                                                    @if (course.IsPublished)
+                                                    {
+                                                        <span class="badge bg-success">Опубликован</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-warning text-dark">Черновик</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <div>@course.StudentCount студентов</div>
+                                                    <small class="text-muted">@completedStudentsCount завершили</small>
+                                                </td>
+                                                <td>
+                                                    @if (course.Rating > 0)
+                                                    {
+                                                        <div class="star-rating">
+                                                            @for (int i = 1; i <= 5; i++)
+                                                            {
+                                                                <i class="bi @(i <= Math.Round(course.Rating) ? "bi-star-fill text-warning" : "bi-star")"></i>
+                                                            }
+                                                            <small class="ms-2">@course.Rating.ToString("F1")</small>
+                                                        </div>
+                                                        <small class="text-muted">@course.ReviewCount отзывов</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Нет оценок</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                                                            <div class="progress-bar" role="progressbar"
+                                                                 style="width: @completionRate%"
+                                                                 aria-valuenow="@completionRate"
+                                                                 aria-valuemin="0"
+                                                                 aria-valuemax="100"></div>
+                                                        </div>
+                                                        <small>@completionRate.ToString("F1")%</small>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="btn-group btn-group-sm">
+                                                        <a href="@($"/courses/{course.Id}")"
+                                                           class="btn btn-outline-info" title="Просмотр">
+                                                            <i class="bi bi-eye">Открыть</i>
+                                                        </a>
+                                                        <a href="@($"/courses/edit/{course.Id}")"
+                                                           class="btn btn-outline-warning" title="Редактировать">
+                                                            <i class="bi bi-pencil">Изменить</i>
+                                                        </a>
+                                                        
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="text-center mt-3">
+                                <a href="/courses?instructor=true" class="btn btn-outline-primary">
+                                    <i class="bi bi-arrow-right me-2"></i>Смотреть все курсы
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-activity me-2"></i>Недавняя активность студентов
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (recentStudentActivity.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Студент</th>
+                                            <th>Курс</th>
+                                            <th>Действие</th>
+                                            <th>Время</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var activity in recentStudentActivity.Take(10))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="flex-shrink-0 me-2">
+                                                            <i class="bi bi-person-circle"></i>
+                                                        </div>
+                                                        <div class="flex-grow-1">
+                                                            <div>@activity.StudentName</div>
+                                                            <small class="text-muted">@activity.StudentEmail</small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>@activity.CourseTitle</td>
+                                                <td>
+                                                    <span class="badge @activity.BadgeClass">
+                                                        <i class="bi @activity.Icon me-1"></i>@activity.Action
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <small class="text-muted">@activity.TimeAgo</small>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-4">
+                                <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
+                                <p class="text-muted mt-2">Активность студентов не найдена</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private Instructor? instructor;
+    private List<Course> allCourses = new();
+    private Dictionary<int, List<Student>> courseStudentsDict = new();
+    private List<StudentActivity> recentStudentActivity = new();
+    private int totalStudents = 0;
+    private int totalLessons = 0;
+    private int totalQuizzes = 0;
+    private double averageCompletionRate = 0;
+    private bool showActiveCourses = true;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await authProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (userId != null)
+        {
+            instructor = await data.GetInstructorByIdAsync(userId);
+            if (instructor != null)
+            {
+                allCourses = instructor.CreatedCourses.ToList();
+
+                foreach (var course in allCourses)
+                {
+                    var students = await data.GetCourseStudentsAsync(course.Id);
+                    courseStudentsDict[course.Id] = students.ToList();
+                }
+
+                await LoadStatistics();
+                await LoadRecentStudentActivity(userId);
+            }
+        }
+
+        loading = false;
+    }
+
+    private async Task LoadStatistics()
+    {
+        var studentIds = new HashSet<string>();
+        totalLessons = 0;
+        totalQuizzes = 0;
+        double totalCompletionRate = 0;
+        int coursesWithStudents = 0;
+
+        foreach (var course in allCourses)
+        {
+            if (courseStudentsDict.ContainsKey(course.Id))
+            {
+                foreach (var student in courseStudentsDict[course.Id])
+                {
+                    studentIds.Add(student.Id);
+                }
+            }
+
+            totalLessons += course.LessonCount;
+            totalQuizzes += course.QuizCount;
+
+            if (course.StudentCount > 0)
+            {
+                totalCompletionRate += course.CompletionRate;
+                coursesWithStudents++;
+            }
+        }
+
+        totalStudents = studentIds.Count;
+        averageCompletionRate = coursesWithStudents > 0 ? totalCompletionRate / coursesWithStudents : 0;
+    }
+
+    private async Task LoadRecentStudentActivity(string instructorId)
+    {
+        recentStudentActivity.Clear();
+
+        foreach (var course in allCourses)
+        {
+            if (!courseStudentsDict.ContainsKey(course.Id))
+                continue;
+
+            var students = courseStudentsDict[course.Id];
+
+            foreach (var student in students)
+            {
+                var enrollment = student.Enrollments.FirstOrDefault(e => e.CourseId == course.Id);
+                if (enrollment != null)
+                {
+                    recentStudentActivity.Add(new StudentActivity
+                    {
+                        StudentName = student.FullName,
+                        StudentEmail = student.Email!,
+                        CourseTitle = course.Title,
+                        Action = "Записался на курс",
+                        Time = enrollment.EnrollmentDate,
+                        Icon = "bi-journal-plus",
+                        BadgeClass = "bg-primary"
+                    });
+                    var recentLessons = enrollment.LessonProgresses
+                        .Where(lp => lp.IsCompleted)
+                        .OrderByDescending(lp => lp.CompletedAt)
+                        .Take(1);
+
+                    foreach (var lesson in recentLessons)
+                    {
+                        recentStudentActivity.Add(new StudentActivity
+                        {
+                            StudentName = student.FullName,
+                            StudentEmail = student.Email!,
+                            CourseTitle = course.Title,
+                            Action = "Завершил урок",
+                            Time = lesson.CompletedAt ?? DateTime.Now,
+                            Icon = "bi-check-circle",
+                            BadgeClass = "bg-success"
+                        });
+                    }
+
+                    var recentQuizzes = enrollment.QuizAttempts
+                        .OrderByDescending(qa => qa.AttemptDate)
+                        .Take(1);
+
+                    foreach (var quiz in recentQuizzes)
+                    {
+                        recentStudentActivity.Add(new StudentActivity
+                        {
+                            StudentName = student.FullName,
+                            StudentEmail = student.Email!,
+                            CourseTitle = course.Title,
+                            Action = quiz.IsCorrect ? "Правильный ответ" : "Неправильный ответ",
+                            Time = quiz.AttemptDate,
+                            Icon = quiz.IsCorrect ? "bi-trophy" : "bi-x-circle",
+                            BadgeClass = quiz.IsCorrect ? "bg-warning text-dark" : "bg-danger"
+                        });
+                    }
+
+                    if (enrollment.IsCompleted && enrollment.CompletionDate.HasValue)
+                    {
+                        recentStudentActivity.Add(new StudentActivity
+                        {
+                            StudentName = student.FullName,
+                            StudentEmail = student.Email!,
+                            CourseTitle = course.Title,
+                            Action = "Завершил курс",
+                            Time = enrollment.CompletionDate.Value,
+                            Icon = "bi-award",
+                            BadgeClass = "bg-warning text-dark"
+                        });
+                    }
+                }
+            }
+        }
+        recentStudentActivity = recentStudentActivity
+            .OrderByDescending(a => a.Time)
+            .Take(15)
+            .ToList();
+    }
+
+    private void ShowActiveCourses()
+    {
+        showActiveCourses = true;
+        StateHasChanged();
+    }
+
+    private void ShowDraftCourses()
+    {
+        showActiveCourses = false;
+        StateHasChanged();
+    }
+
+    private void CreateNewCourse()
+    {
+        navigate.NavigateTo("/courses/add");
+    }
+
+    private class StudentActivity
+    {
+        public string StudentName { get; set; } = string.Empty;
+        public string StudentEmail { get; set; } = string.Empty;
+        public string CourseTitle { get; set; } = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public DateTime Time { get; set; }
+        public string Icon { get; set; } = string.Empty;
+        public string BadgeClass { get; set; } = string.Empty;
+
+        public string TimeAgo
+        {
+            get
+            {
+                var timeSpan = DateTime.Now - Time;
+
+                if (timeSpan.TotalDays >= 30)
+                    return $"{Math.Floor(timeSpan.TotalDays / 30)} мес. назад";
+
+                if (timeSpan.TotalDays >= 1)
+                    return $"{Math.Floor(timeSpan.TotalDays)} дн. назад";
+
+                if (timeSpan.TotalHours >= 1)
+                    return $"{Math.Floor(timeSpan.TotalHours)} ч. назад";
+
+                if (timeSpan.TotalMinutes >= 1)
+                    return $"{Math.Floor(timeSpan.TotalMinutes)} мин. назад";
+
+                return "только что";
+            }
+        }
+    }
+}

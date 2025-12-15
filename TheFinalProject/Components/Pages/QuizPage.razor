@@ -1,0 +1,516 @@
+﻿@page "/quizzes/{Id:int}"
+@rendermode InteractiveServer
+@using TheFinalProject.Data.Models
+@using TheFinalProject.Data.Interfaces
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject ICourseService data
+@inject NavigationManager navigate
+@inject AuthenticationStateProvider authProvider
+@inject IJSRuntime JS
+
+<PageTitle>@(Quiz?.Title ?? "Тест")</PageTitle>
+
+@if (Quiz == null || Course == null)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container">
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="/courses">Курсы</a>
+                </li>
+                <li class="breadcrumb-item">
+                    <a href="@($"/courses/{Course.Id}")">@Course.Title</a>
+                </li>
+                @if (Quiz.Lesson != null)
+                {
+                    <li class="breadcrumb-item">
+                        <a href="@($"/lessons/{Quiz.Lesson.Id}")">Урок @Quiz.Lesson.OrderNumber</a>
+                    </li>
+                }
+                <li class="breadcrumb-item active" aria-current="page">Тест</li>
+            </ol>
+        </nav>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header @(quizHeaderClass)">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h2 class="h4 mb-0">
+                                    <i class="bi bi-question-circle me-2"></i>
+                                    @Quiz.Title
+                                </h2>
+                                <small class="text-muted">
+                                    @if (Quiz.Lesson != null)
+                                    {
+                                        <span>Тест к уроку @Quiz.Lesson.OrderNumber</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Тест курса</span>
+                                    }
+                                </small>
+                            </div>
+                            <div>
+                                <span class="badge @difficultyBadgeClass">
+                                    @GetDifficultyText(Quiz.Difficulty)
+                                </span>
+                                <span class="badge bg-info ms-2">
+                                    <i class="bi bi-clock me-1"></i>@Quiz.TimeLimitMinutes мин.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="alert alert-secondary mb-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    <strong>Информация о тесте:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Вопросов: <strong>1</strong> (текущий тест)</li>
+                                        <li>Баллов за правильный ответ: <strong>@Quiz.Points</strong></li>
+                                        <li>Максимальное количество попыток: <strong>@(Quiz.AllowMultipleAttempts ? "Неограниченно" : Quiz.MaxAttempts.ToString())</strong></li>
+                                        <li>Ваши попытки: <strong>@userAttemptsCount</strong></li>
+                                    </ul>
+                                </div>
+                                @if (timerEnabled)
+                                {
+                                    <div class="text-center">
+                                        <div class="display-6 text-danger" id="timer">
+                                            @timeLeft.ToString(@"mm\:ss")
+                                        </div>
+                                        <small class="text-muted">Осталось времени</small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        @if (showResult)
+                        {
+                            <div class="alert @(lastAttempt?.IsCorrect == true ? "alert-success" : "alert-danger") mb-4">
+                                <h5 class="alert-heading">
+                                    <i class="bi @(lastAttempt?.IsCorrect == true ? "bi-check-circle" : "bi-x-circle") me-2"></i>
+                                    @(lastAttempt?.IsCorrect == true ? "Правильно!" : "Неправильно!")
+                                </h5>
+                                <p class="mb-2">
+                                    Ваш ответ: <strong>@(selectedAnswerIndex >= 0 && selectedAnswerIndex < Quiz.Options.Count ? Quiz.Options[selectedAnswerIndex] : "Не выбран")</strong>
+                                </p>
+                                <p class="mb-2">
+                                    Правильный ответ: <strong>@Quiz.Options[Quiz.CorrectAnswerIndex]</strong>
+                                </p>
+                                @if (!string.IsNullOrEmpty(Quiz.Explanation))
+                                {
+                                    <div class="mt-3">
+                                        <strong>Объяснение:</strong>
+                                        <p class="mb-0 mt-1">@Quiz.Explanation</p>
+                                    </div>
+                                }
+                                <div class="mt-3">
+                                    <strong>Заработано баллов:</strong> @(lastAttempt?.PointsEarned ?? 0) из @Quiz.Points
+                                </div>
+                            </div>
+                        }
+
+                        <div class="mb-4">
+                            <h4 class="mb-3">@Quiz.Question</h4>
+                            <p class="text-muted">@Quiz.Description</p>
+                        </div>
+
+                        @if (!showResult)
+                        {
+                            <div class="options-list">
+                                @for (int i = 0; i < Quiz.Options.Count; i++)
+                                {
+                                    var option = Quiz.Options[i];
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input"
+                                               type="radio"
+                                               name="quizOption"
+                                               id="option_@i"
+                                               value="@i"
+                                               @onchange="() => SelectAnswer(i)"
+                                               checked="@(selectedAnswerIndex == i)"
+                                               disabled="@isSubmitting">
+                                        <label class="form-check-label w-100" for="option_@i">
+                                            <div class="card @(selectedAnswerIndex == i ? "border-primary" : "border-light")">
+                                                <div class="card-body">
+                                                    @option
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <div class="border-top pt-4 mt-4">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    @if (Quiz.Lesson != null)
+                                    {
+                                        <a href="@($"/lessons/{Quiz.Lesson.Id}")" class="btn btn-outline-secondary">
+                                            <i class="bi bi-arrow-left me-2"></i>Назад к уроку
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a href="@($"/courses/{Course.Id}")" class="btn btn-outline-secondary">
+                                            <i class="bi bi-arrow-left me-2"></i>Назад к курсу
+                                        </a>
+                                    }
+                                </div>
+
+                                <div>
+                                    @if (!showResult)
+                                    {
+                                        <button class="btn btn-primary"
+                                                @onclick="SubmitAnswer"
+                                                disabled="@(selectedAnswerIndex == -1 || isSubmitting || !canAttempt)">
+                                            @if (isSubmitting)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-2" role="status">Проверка...</span>
+                                                
+                                                                        }
+                                            else
+                                            {
+                                                <i class="bi bi-send me-2">Ответить</i>
+                                                
+                                                                        }
+                                        </button>
+                                    }
+                                    else if (Quiz.AllowMultipleAttempts && canAttempt)
+                                    {
+                                        <button class="btn btn-outline-primary" @onclick="TryAgain">
+                                            <i class="bi bi-arrow-repeat me-2"></i>Попробовать снова
+                                        </button>
+                                    }
+
+                                    @if (showResult)
+                                    {
+                                        <button class="btn btn-success ms-2" @onclick="ContinueLearning">
+                                            @if (Quiz.Lesson != null)
+                                            {
+                                                <span>Продолжить обучение <i class="bi bi-arrow-right ms-2"></i></span>
+                                            }
+                                            else
+                                            {
+                                                <span>Вернуться к курсу <i class="bi bi-arrow-right ms-2"></i></span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-graph-up me-2"></i>Статистика теста
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-4">
+                            <div class="display-4 @(Quiz.SuccessRate >= 70 ? "text-success" : Quiz.SuccessRate >= 40 ? "text-warning" : "text-danger")">
+                                @Quiz.SuccessRate.ToString("F1")%
+                            </div>
+                            <small class="text-muted">Процент успешных прохождений</small>
+                        </div>
+
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2">
+                                <i class="bi bi-people text-primary me-2"></i>
+                                <strong>Всего попыток:</strong> @Quiz.AttemptCount
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-check-circle text-success me-2"></i>
+                                <strong>Правильных ответов:</strong> @Quiz.QuizAttempts.Count(qa => qa.IsCorrect)
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-x-circle text-danger me-2"></i>
+                                <strong>Неправильных ответов:</strong> @Quiz.QuizAttempts.Count(qa => !qa.IsCorrect)
+                            </li>
+                            @if (enrollment != null)
+                            {
+                                <li class="mb-2">
+                                    <i class="bi bi-person-check text-info me-2"></i>
+                                    <strong>Ваши попытки:</strong> @userAttemptsCount
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-trophy text-warning me-2"></i>
+                                    <strong>Ваши баллы:</strong> @userTotalPoints
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+
+                @if (userAttempts.Any())
+                {
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-clock-history me-2"></i>История ваших попыток
+                            </h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush">
+                                @foreach (var attempt in userAttempts.OrderByDescending(a => a.AttemptDate).Take(5))
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <small class="text-muted">@attempt.AttemptDate.ToString("dd.MM.yyyy HH:mm")</small>
+                                                <div>
+                                                    @if (attempt.IsCorrect)
+                                                    {
+                                                        <span class="badge bg-success">
+                                                            <i class="bi bi-check-circle me-1"></i>Правильно
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger">
+                                                            <i class="bi bi-x-circle me-1"></i>Неправильно
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="text-end">
+                                                <strong>@attempt.PointsEarned</strong>
+                                                <small class="text-muted d-block">баллов</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Quiz? Quiz { get; set; }
+    private Course? Course { get; set; }
+    private List<QuizAttempt> userAttempts = new();
+    private QuizAttempt? lastAttempt;
+    private int selectedAnswerIndex = -1;
+    private bool showResult = false;
+    private bool isSubmitting = false;
+    private bool canAttempt = true;
+    private int userAttemptsCount = 0;
+    private int userTotalPoints = 0;
+    private string? userId;
+    private Enrollment? enrollment;
+    private bool timerEnabled = false;
+    private TimeSpan timeLeft;
+    private System.Threading.Timer? timer;
+    private DateTime quizStartTime;
+
+    private string quizHeaderClass => Quiz?.Difficulty switch
+    {
+        DifficultyLevel.Easy => "bg-success text-white",
+        DifficultyLevel.Medium => "bg-warning text-dark",
+        DifficultyLevel.Hard => "bg-danger text-white",
+        _ => "bg-primary text-white"
+    };
+
+    private string difficultyBadgeClass => Quiz?.Difficulty switch
+    {
+        DifficultyLevel.Easy => "bg-success",
+        DifficultyLevel.Medium => "bg-warning text-dark",
+        DifficultyLevel.Hard => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Quiz = await data.GetQuizByIdAsync(Id);
+
+        if (Quiz?.Lesson?.CourseId != null)
+        {
+            Course = await data.GetCourseByIdAsync(Quiz.Lesson.CourseId);
+        }
+        else if (Quiz?.CourseId != null)
+        {
+            Course = await data.GetCourseByIdAsync(Quiz.CourseId);
+        }
+
+        if (Course == null)
+        {
+            navigate.NavigateTo("/courses");
+            return;
+        }
+
+        var authState = await authProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (userId != null && Quiz != null)
+        {
+            enrollment = await data.GetUserEnrollmentAsync(userId, Course.Id);
+            if (enrollment != null)
+            {
+                userAttempts = enrollment.QuizAttempts
+                    .Where(qa => qa.QuizId == Id)
+                    .ToList();
+
+                userAttemptsCount = userAttempts.Count;
+                userTotalPoints = userAttempts.Sum(a => a.PointsEarned);
+                lastAttempt = userAttempts.OrderByDescending(a => a.AttemptDate).FirstOrDefault();
+
+                canAttempt = Quiz.CanUserAttempt(userId);
+
+                if (lastAttempt != null)
+                {
+                    showResult = true;
+                    selectedAnswerIndex = lastAttempt.SelectedAnswerIndex;
+                }
+            }
+
+            // Start timer if this is a new attempt
+            if (!showResult && canAttempt && Quiz.TimeLimitMinutes > 0)
+            {
+                StartTimer();
+            }
+        }
+    }
+
+    private void StartTimer()
+    {
+        timerEnabled = true;
+        quizStartTime = DateTime.Now;
+        timeLeft = TimeSpan.FromMinutes(Quiz!.TimeLimitMinutes);
+
+        timer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                timeLeft = TimeSpan.FromMinutes(Quiz.TimeLimitMinutes) - (DateTime.Now - quizStartTime);
+
+                if (timeLeft.TotalSeconds <= 0)
+                {
+                    timer?.Dispose();
+                    timerEnabled = false;
+                    SubmitAnswer();
+                }
+
+                StateHasChanged();
+            });
+        }, null, 1000, 1000);
+    }
+
+    private void SelectAnswer(int index)
+    {
+        if (!showResult && !isSubmitting)
+        {
+            selectedAnswerIndex = index;
+        }
+    }
+
+    private async Task SubmitAnswer()
+    {
+        if (selectedAnswerIndex == -1 || isSubmitting || !canAttempt)
+            return;
+
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            if (timerEnabled)
+            {
+                timer?.Dispose();
+                timerEnabled = false;
+            }
+
+            if (userId != null && Quiz != null)
+            {
+                lastAttempt = await data.SubmitQuizAnswerAsync(userId, Quiz.Id, selectedAnswerIndex);
+                if (lastAttempt != null)
+                {
+                    userAttempts.Add(lastAttempt);
+                    userAttemptsCount++;
+                    userTotalPoints += lastAttempt.PointsEarned;
+                    showResult = true;
+                    canAttempt = Quiz.CanUserAttempt(userId);
+
+                    await JS.InvokeVoidAsync("showToast",
+                        lastAttempt.IsCorrect ? "success" : "error",
+                        lastAttempt.IsCorrect
+                            ? $"Правильно! Вы заработали {lastAttempt.PointsEarned} баллов."
+                            : $"Неправильно. Попробуйте еще раз!");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting quiz answer: {ex.Message}");
+            await JS.InvokeVoidAsync("showToast", "error", "Ошибка при отправке ответа");
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void TryAgain()
+    {
+        showResult = false;
+        selectedAnswerIndex = -1;
+
+        if (canAttempt && Quiz!.TimeLimitMinutes > 0)
+        {
+            StartTimer();
+        }
+    }
+
+    private void ContinueLearning()
+    {
+        if (Quiz!.Lesson != null)
+        {
+            navigate.NavigateTo($"/lessons/{Quiz.Lesson.Id}");
+        }
+        else
+        {
+            navigate.NavigateTo($"/courses/{Course!.Id}");
+        }
+    }
+
+    private string GetDifficultyText(DifficultyLevel difficulty)
+    {
+        return difficulty switch
+        {
+            DifficultyLevel.Easy => "Легкий",
+            DifficultyLevel.Medium => "Средний",
+            DifficultyLevel.Hard => "Сложный",
+            _ => "Неизвестно"
+        };
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+}

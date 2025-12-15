@@ -1,0 +1,285 @@
+﻿@page "/courses"
+@rendermode InteractiveServer
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using TheFinalProject.Data.Models
+@using TheFinalProject.Data.Interfaces
+@inject ICourseService data
+@inject NavigationManager navigate
+@inject AuthenticationStateProvider authProvider
+
+<PageTitle>Курсы</PageTitle>
+
+<h1>Доступные курсы</h1>
+
+@if (courses == null)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col">
+                <div class="btn-group" role="group">
+                    <button class="btn @(showMyCourses ? "btn-outline-primary" : "btn-primary")"
+                            @onclick="async () => await ShowAllCourses()">
+                        <i class="bi bi-grid"></i> Все курсы
+                    </button>
+                    <button class="btn @(showMyCourses ? "btn-primary" : "btn-outline-primary") ms-2"
+                            @onclick="async () => await ShowMyCourses()">
+                        <i class="bi bi-journal-bookmark"></i> Мои курсы
+                    </button>
+                </div>
+
+                @if (isInstructor)
+                {
+                    <button class="btn btn-success ms-2" @onclick="AddCourse">
+                        <i class="bi bi-plus-circle"></i> Создать курс
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (!courses.Any())
+        {
+            <div class="alert alert-info">
+                <h4><i class="bi bi-info-circle"></i> Курсы не найдены</h4>
+                <p>@(showMyCourses ? "Вы еще не записались ни на один курс." : "В данный момент нет доступных курсов.")</p>
+                @if (!showMyCourses)
+                {
+                    <a href="/courses" class="btn btn-primary">Обновить список</a>
+                }
+                else
+                {
+                    <a href="/courses" class="btn btn-primary">Найти курсы</a>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                @foreach (var course in courses)
+                {
+                    var isEnrolled = userEnrollments?.Contains(course.Id) == true;
+
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100 course-card">
+                            @if (!string.IsNullOrEmpty(course.ImageUrl))
+                            {
+                                <img src="@course.ImageUrl" class="card-img-top" alt="@course.Title" style="height: 200px; object-fit: cover;">
+                            }
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="card-title mb-0">@course.Title</h5>
+                            </div>
+                            <div class="card-body d-flex flex-column">
+                                <p class="card-text flex-grow-1">@course.ShortDescription</p>
+
+                                <div class="mb-3">
+                                    <span class="badge bg-info me-1">@course.Category</span>
+                                    <span class="badge bg-secondary me-1">@course.Level</span>
+                                    @if (course.Price == 0)
+                                    {
+                                        <span class="badge bg-success">Бесплатно</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning">@course.Price.ToString("C")</span>
+                                    }
+                                </div>
+
+                                <div class="mb-3">
+                                    <p class="card-text mb-1">
+                                        <small class="text-muted">
+                                            <i class="bi bi-person"></i> @course.Instructor?.FullName
+                                        </small>
+                                    </p>
+                                    <p class="card-text mb-1">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock"></i> @course.ActualDurationHours ч.
+                                        </small>
+                                    </p>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            <i class="bi bi-people"></i> @course.StudentCount студентов
+                                        </small>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <button class="btn btn-primary btn-sm"
+                                        @onclick='()=>ViewCourse(1)'>
+                                    <i class="bi bi-eye"></i> Подробнее
+                                </button>
+
+                                @if (isEnrolled)
+                                {
+                                    <button class="btn btn-success btn-sm ms-2" @onclick="() => ContinueCourse(course)">
+                                        <i class="bi bi-play-circle">Продолжить</i>
+                                    </button>
+                                }
+                                else if (course.IsPublished)
+                                {
+                                    <button class="btn btn-outline-success btn-sm ms-2"
+                                            @onclick="async () => await EnrollInCourse(course.Id)">
+                                        <i class="bi bi-plus-circle">Записаться</i>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark ms-2">Не опубликован</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IEnumerable<Course>? courses;
+    private List<int>? userEnrollments;
+    private bool isInstructor = false;
+    private bool showMyCourses = false;
+    private string? userId;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadUserData();
+            await LoadCourses();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке данных: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadUserData()
+    {
+        try
+        {
+            var authState = await authProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            isInstructor = user.IsInRole("Instructor") || user.IsInRole("Admin");
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                var userCourses = await data.GetUserCoursesAsync(userId);
+                userEnrollments = userCourses?.Select(c => c.Id).ToList() ?? new List<int>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке данных пользователя: {ex.Message}");
+        }
+    }
+
+    private async Task LoadCourses()
+    {
+        try
+        {
+            if (showMyCourses && !string.IsNullOrEmpty(userId))
+            {
+                courses = await data.GetUserCoursesAsync(userId);
+            }
+            else
+            {
+                courses = await data.GetPublishedCoursesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при загрузке курсов: {ex.Message}");
+            courses = new List<Course>();
+        }
+    }
+
+    private async Task ShowAllCourses()
+    {
+        showMyCourses = false;
+        await LoadCourses();
+        StateHasChanged();
+    }
+
+    private async Task ShowMyCourses()
+    {
+        showMyCourses = true;
+        await LoadCourses();
+        StateHasChanged();
+    }
+
+    private void AddCourse()
+    {
+        navigate.NavigateTo("/courses/add");
+    }
+
+    private void ViewCourse(int id)
+    {
+        Console.WriteLine(id);
+        navigate.NavigateTo($"/courses/{id}");
+       
+    }
+
+    private void ContinueCourse(Course course)
+    {
+        if (course?.Elements?.Any() == true)
+        {
+            var firstLesson = course.GetLessons().FirstOrDefault();
+            if (firstLesson != null)
+            {
+                navigate.NavigateTo($"/lessons/{firstLesson.Id}");
+            }
+            else
+            {
+                var firstQuiz = course.GetQuizzes().FirstOrDefault();
+                if (firstQuiz != null)
+                {
+                    navigate.NavigateTo($"/quizzes/{firstQuiz.Id}");
+                }
+            }
+        }
+        
+    }
+
+
+    private async Task EnrollInCourse(int courseId)
+    {
+        if (string.IsNullOrEmpty(userId))
+        {
+            navigate.NavigateTo("/login", true);
+            return;
+        }
+
+        try
+        {
+            var enrollment = await data.EnrollUserInCourseAsync(userId, courseId);
+            if (enrollment != null)
+            {
+                userEnrollments?.Add(courseId);
+                if (showMyCourses)
+                {
+                    await LoadCourses();
+                }
+
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при записи на курс: {ex.Message}");
+        }
+    }
+}

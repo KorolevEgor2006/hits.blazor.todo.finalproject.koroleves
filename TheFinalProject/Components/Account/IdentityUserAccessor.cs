@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using TheFinalProject.Data;
+using TheFinalProject.Data.Models;
 
 namespace TheFinalProject.Components.Account
 {
